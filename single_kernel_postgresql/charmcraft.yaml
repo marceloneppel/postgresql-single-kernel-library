@@ -16,3 +16,7 @@ platforms:
 peers:
   database-peers:
     interface: postgresql_peers
+
+provides:
+  database:
+    interface: postgresql_client

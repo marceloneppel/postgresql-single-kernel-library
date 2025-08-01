@@ -9,13 +9,8 @@ from psycopg2.sql import SQL, Composed, Identifier, Literal
 
 from single_kernel_postgresql.abstract_charm import AbstractPostgreSQLCharm
 from single_kernel_postgresql.config.literals import (
-    BACKUP_USER,
-    MONITORING_USER,
     PEER,
-    REPLICATION_USER,
-    REWIND_USER,
     SYSTEM_USERS,
-    USER,
 )
 from single_kernel_postgresql.utils.postgresql_connection import (
     ACCESS_GROUP_INTERNAL,
@@ -73,119 +68,45 @@ def test_create_database(harness):
     with patch(
         "single_kernel_postgresql.utils.postgresql_connection.PostgreSQLConnection.enable_disable_extensions"
     ) as _enable_disable_extensions, patch(
-        "single_kernel_postgresql.utils.postgresql_connection.PostgreSQLConnection._generate_database_privileges_statements"
-    ) as _generate_database_privileges_statements, patch(
         "single_kernel_postgresql.utils.postgresql_connection.PostgreSQLConnection._connect_to_database"
     ) as _connect_to_database:
         # Test a successful database creation.
         database = "test_database"
-        user = "test_user"
         plugins = ["test_plugin_1", "test_plugin_2"]
         with harness.hooks_disabled():
             rel_id = harness.add_relation("database", "application")
             harness.add_relation_unit(rel_id, "application/0")
             harness.update_relation_data(rel_id, "application", {"database": database})
-        database_relation = harness.model.get_relation("database")
-        client_relations = [database_relation]
         schemas = [("test_schema_1",), ("test_schema_2",)]
         _connect_to_database.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value.fetchall.return_value = schemas
-        harness.charm.postgresql_connection.create_database(
-            database, user, plugins, client_relations
-        )
+        harness.charm.postgresql_connection.create_database(database, plugins)
         execute = _connect_to_database.return_value.cursor.return_value.execute
         execute.assert_has_calls([
             call(
                 Composed([
-                    SQL("REVOKE ALL PRIVILEGES ON DATABASE "),
-                    Identifier(database),
-                    SQL(" FROM PUBLIC;"),
-                ])
-            ),
-            call(
-                Composed([
-                    SQL("GRANT ALL PRIVILEGES ON DATABASE "),
-                    Identifier(database),
-                    SQL(" TO "),
-                    Identifier(user),
+                    SQL("SELECT datname FROM pg_database WHERE datname="),
+                    Literal("test_database"),
                     SQL(";"),
                 ])
-            ),
-            call(
-                Composed([
-                    SQL("GRANT ALL PRIVILEGES ON DATABASE "),
-                    Identifier(database),
-                    SQL(" TO "),
-                    Identifier(BACKUP_USER),
-                    SQL(";"),
-                ])
-            ),
-            call(
-                Composed([
-                    SQL("GRANT ALL PRIVILEGES ON DATABASE "),
-                    Identifier(database),
-                    SQL(" TO "),
-                    Identifier(REPLICATION_USER),
-                    SQL(";"),
-                ])
-            ),
-            call(
-                Composed([
-                    SQL("GRANT ALL PRIVILEGES ON DATABASE "),
-                    Identifier(database),
-                    SQL(" TO "),
-                    Identifier(REWIND_USER),
-                    SQL(";"),
-                ])
-            ),
-            call(
-                Composed([
-                    SQL("GRANT ALL PRIVILEGES ON DATABASE "),
-                    Identifier(database),
-                    SQL(" TO "),
-                    Identifier(USER),
-                    SQL(";"),
-                ])
-            ),
-            call(
-                Composed([
-                    SQL("GRANT ALL PRIVILEGES ON DATABASE "),
-                    Identifier(database),
-                    SQL(" TO "),
-                    Identifier(MONITORING_USER),
-                    SQL(";"),
-                ])
-            ),
+            )
         ])
-        _generate_database_privileges_statements.assert_called_once_with(
-            1, [schemas[0][0], schemas[1][0]], user
-        )
         _enable_disable_extensions.assert_called_once_with(
             {plugins[0]: True, plugins[1]: True}, database
         )
 
         # Test when two relations request the same database.
         _connect_to_database.reset_mock()
-        _generate_database_privileges_statements.reset_mock()
         with harness.hooks_disabled():
             other_rel_id = harness.add_relation("database", "other-application")
             harness.add_relation_unit(other_rel_id, "other-application/0")
             harness.update_relation_data(other_rel_id, "other-application", {"database": database})
-        other_database_relation = harness.model.get_relation("database", other_rel_id)
-        client_relations = [database_relation, other_database_relation]
-        harness.charm.postgresql_connection.create_database(
-            database, user, plugins, client_relations
-        )
-        _generate_database_privileges_statements.assert_called_once_with(
-            2, [schemas[0][0], schemas[1][0]], user
-        )
+        harness.charm.postgresql_connection.create_database(database, plugins)
 
         # Test a failed database creation.
         _enable_disable_extensions.reset_mock()
         execute.side_effect = psycopg2.Error
         try:
-            harness.charm.postgresql_connection.create_database(
-                database, user, plugins, client_relations
-            )
+            harness.charm.postgresql_connection.create_database(database, plugins)
             assert False
         except PostgreSQLCreateDatabaseError:
             pass
@@ -218,147 +139,9 @@ def test_grant_relation_access_group_memberships(harness):
 
         execute.assert_has_calls([
             call(
-                "SELECT usename "
-                "FROM pg_catalog.pg_user "
-                "WHERE usename LIKE 'relation_id_%' OR usename LIKE 'relation-%' "
-                "OR usename LIKE 'pgbouncer_auth_relation_%' OR usename LIKE '%_user_%_%';"
-            ),
+                "SELECT usename FROM pg_catalog.pg_user WHERE usename LIKE 'relation_id_%' OR usename LIKE 'relation-%' OR usename LIKE 'pgbouncer_auth_relation_%' OR usename LIKE '%_user_%_%' OR usename LIKE 'logical_replication_relation_%';"
+            )
         ])
-
-
-def test_generate_database_privileges_statements(harness):
-    # Test with only one established relation.
-    assert harness.charm.postgresql_connection._generate_database_privileges_statements(
-        1, ["test_schema_1", "test_schema_2"], "test_user"
-    ) == [
-        Composed([
-            SQL(
-                "DO $$\nDECLARE r RECORD;\nBEGIN\n  FOR r IN (SELECT statement FROM (SELECT 1 AS index,'ALTER TABLE '|| schemaname || '.\"' || tablename ||'\" OWNER TO "
-            ),
-            Identifier("test_user"),
-            SQL(
-                ";' AS statement\nFROM pg_tables WHERE NOT schemaname IN ('pg_catalog', 'information_schema')\nUNION SELECT 2 AS index,'ALTER SEQUENCE '|| sequence_schema || '.\"' || sequence_name ||'\" OWNER TO "
-            ),
-            Identifier("test_user"),
-            SQL(
-                ";' AS statement\nFROM information_schema.sequences WHERE NOT sequence_schema IN ('pg_catalog', 'information_schema')\nUNION SELECT 3 AS index,'ALTER FUNCTION '|| nsp.nspname || '.\"' || p.proname ||'\"('||pg_get_function_identity_arguments(p.oid)||') OWNER TO "
-            ),
-            Identifier("test_user"),
-            SQL(
-                ";' AS statement\nFROM pg_proc p JOIN pg_namespace nsp ON p.pronamespace = nsp.oid WHERE NOT nsp.nspname IN ('pg_catalog', 'information_schema') AND p.prokind = 'f'\nUNION SELECT 4 AS index,'ALTER PROCEDURE '|| nsp.nspname || '.\"' || p.proname ||'\"('||pg_get_function_identity_arguments(p.oid)||') OWNER TO "
-            ),
-            Identifier("test_user"),
-            SQL(
-                ";' AS statement\nFROM pg_proc p JOIN pg_namespace nsp ON p.pronamespace = nsp.oid WHERE NOT nsp.nspname IN ('pg_catalog', 'information_schema') AND p.prokind = 'p'\nUNION SELECT 5 AS index,'ALTER AGGREGATE '|| nsp.nspname || '.\"' || p.proname ||'\"('||pg_get_function_identity_arguments(p.oid)||') OWNER TO "
-            ),
-            Identifier("test_user"),
-            SQL(
-                ";' AS statement\nFROM pg_proc p JOIN pg_namespace nsp ON p.pronamespace = nsp.oid WHERE NOT nsp.nspname IN ('pg_catalog', 'information_schema') AND p.prokind = 'a'\nUNION SELECT 6 AS index,'ALTER VIEW '|| schemaname || '.\"' || viewname ||'\" OWNER TO "
-            ),
-            Identifier("test_user"),
-            SQL(
-                ";' AS statement\nFROM pg_catalog.pg_views WHERE NOT schemaname IN ('pg_catalog', 'information_schema')) AS statements ORDER BY index) LOOP\n      EXECUTE format(r.statement);\n  END LOOP;\nEND; $$;"
-            ),
-        ]),
-        Composed([
-            SQL(
-                "UPDATE pg_catalog.pg_largeobject_metadata\nSET lomowner = (SELECT oid FROM pg_roles WHERE rolname = "
-            ),
-            Literal("test_user"),
-            SQL(")\nWHERE lomowner = (SELECT oid FROM pg_roles WHERE rolname = "),
-            Literal("operator"),
-            SQL(");"),
-        ]),
-        Composed([
-            SQL("ALTER SCHEMA "),
-            Identifier("test_schema_1"),
-            SQL(" OWNER TO "),
-            Identifier("test_user"),
-            SQL(";"),
-        ]),
-        Composed([
-            SQL("ALTER SCHEMA "),
-            Identifier("test_schema_2"),
-            SQL(" OWNER TO "),
-            Identifier("test_user"),
-            SQL(";"),
-        ]),
-    ]
-    # Test with multiple established relations.
-    assert harness.charm.postgresql_connection._generate_database_privileges_statements(
-        2, ["test_schema_1", "test_schema_2"], "test_user"
-    ) == [
-        Composed([
-            SQL("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA "),
-            Identifier("test_schema_1"),
-            SQL(" TO "),
-            Identifier("test_user"),
-            SQL(";"),
-        ]),
-        Composed([
-            SQL("GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA "),
-            Identifier("test_schema_1"),
-            SQL(" TO "),
-            Identifier("test_user"),
-            SQL(";"),
-        ]),
-        Composed([
-            SQL("GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA "),
-            Identifier("test_schema_1"),
-            SQL(" TO "),
-            Identifier("test_user"),
-            SQL(";"),
-        ]),
-        Composed([
-            SQL("GRANT USAGE ON SCHEMA "),
-            Identifier("test_schema_1"),
-            SQL(" TO "),
-            Identifier("test_user"),
-            SQL(";"),
-        ]),
-        Composed([
-            SQL("GRANT CREATE ON SCHEMA "),
-            Identifier("test_schema_1"),
-            SQL(" TO "),
-            Identifier("test_user"),
-            SQL(";"),
-        ]),
-        Composed([
-            SQL("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA "),
-            Identifier("test_schema_2"),
-            SQL(" TO "),
-            Identifier("test_user"),
-            SQL(";"),
-        ]),
-        Composed([
-            SQL("GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA "),
-            Identifier("test_schema_2"),
-            SQL(" TO "),
-            Identifier("test_user"),
-            SQL(";"),
-        ]),
-        Composed([
-            SQL("GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA "),
-            Identifier("test_schema_2"),
-            SQL(" TO "),
-            Identifier("test_user"),
-            SQL(";"),
-        ]),
-        Composed([
-            SQL("GRANT USAGE ON SCHEMA "),
-            Identifier("test_schema_2"),
-            SQL(" TO "),
-            Identifier("test_user"),
-            SQL(";"),
-        ]),
-        Composed([
-            SQL("GRANT CREATE ON SCHEMA "),
-            Identifier("test_schema_2"),
-            SQL(" TO "),
-            Identifier("test_user"),
-            SQL(";"),
-        ]),
-    ]
 
 
 def test_get_last_archived_wal(harness):
