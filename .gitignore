@@ -1,0 +1,15 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+
+# Distribution / packaging
+*.egg-info/
+
+# Unit test / coverage reports
+.tox/
+.coverage
+
+# Environments
+.venv
+
+# PyCharm project folder.
+.idea/
