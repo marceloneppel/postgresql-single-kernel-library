@@ -1428,7 +1428,7 @@ class PostgreSQLConnection:
             ) as connection, connection.cursor() as cursor:
                 cursor.execute(
                     SQL("SELECT TRUE FROM pg_roles WHERE rolname='{}';").format(
-                        ROLE_DATABASES_OWNER
+                        Identifier(ROLE_DATABASES_OWNER)
                     )
                 )
                 if cursor.fetchone() is None:
@@ -1520,7 +1520,7 @@ $$ LANGUAGE plpgsql;""").format(
                 ) as connection, connection.cursor() as cursor:
                     cursor.execute(SQL("CREATE EXTENSION IF NOT EXISTS login_hook;"))
                     cursor.execute(SQL("CREATE SCHEMA IF NOT EXISTS login_hook;"))
-                    cursor.execute(SQL(function_creation_statement))
+                    cursor.execute(function_creation_statement)
                     cursor.execute(SQL("GRANT EXECUTE ON FUNCTION login_hook.login() TO PUBLIC;"))
         except psycopg2.Error as e:
             logger.error(f"Failed to create login hook function: {e}")
@@ -1637,7 +1637,7 @@ $$ LANGUAGE plpgsql security definer;""").format(
                 with self._connect_to_database(
                     database=database
                 ) as connection, connection.cursor() as cursor:
-                    cursor.execute(SQL(function_creation_statement))
+                    cursor.execute(function_creation_statement)
                     cursor.execute(
                         SQL("ALTER FUNCTION set_up_predefined_catalog_roles OWNER TO operator;")
                     )
