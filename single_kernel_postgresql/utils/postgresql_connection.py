@@ -1488,9 +1488,9 @@ BEGIN
 	EXECUTE 'SELECT current_database()' INTO db_name;
 	db_admin_role = 'charmed_' || db_name || '_admin';
 
-	EXECUTE format('SELECT EXISTS(SELECT * FROM pg_auth_members a, pg_roles b, pg_roles c WHERE a.roleid = b.oid AND a.member = c.oid AND (b.rolname = %L OR b.rolname = %L) and c.rolname = %L)', db_admin_role, '{}', cur_user) INTO is_user_admin;
+	EXECUTE format('SELECT EXISTS(SELECT * FROM pg_auth_members a, pg_roles b, pg_roles c WHERE a.roleid = b.oid AND a.member = c.oid AND (b.rolname = %L OR b.rolname = %L) and c.rolname = %L)', db_admin_role, {}, cur_user) INTO is_user_admin;
 
-    EXECUTE format('SELECT EXISTS(SELECT * FROM pg_auth_members a, pg_roles b, pg_roles c WHERE a.roleid = b.oid AND a.member = c.oid AND b.rolname = %L and c.rolname = %L)', '{}', cur_user) INTO user_has_createdb;
+    EXECUTE format('SELECT EXISTS(SELECT * FROM pg_auth_members a, pg_roles b, pg_roles c WHERE a.roleid = b.oid AND a.member = c.oid AND b.rolname = %L and c.rolname = %L)', {}, cur_user) INTO user_has_createdb;
 
 	BEGIN
         IF is_user_admin = true THEN
@@ -1498,7 +1498,7 @@ BEGIN
 			EXECUTE format('SET ROLE %L', db_owner_role);
 		ELSE
             IF user_has_createdb = true THEN
-                EXECUTE format('SET ROLE %L', '{}');
+                EXECUTE format('SET ROLE %L', {});
             END IF;
 		END IF;
 	EXCEPTION
