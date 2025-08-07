@@ -1427,7 +1427,7 @@ class PostgreSQLConnection:
                 database="template1"
             ) as connection, connection.cursor() as cursor:
                 cursor.execute(
-                    SQL("SELECT TRUE FROM pg_roles WHERE rolname='{}';").format(
+                    SQL("SELECT TRUE FROM pg_roles WHERE rolname={};").format(
                         Literal(ROLE_DATABASES_OWNER)
                     )
                 )
