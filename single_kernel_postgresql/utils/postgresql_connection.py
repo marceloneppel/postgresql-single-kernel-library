@@ -1552,7 +1552,7 @@ BEGIN
             'CREATE ROLE ' || owner_user || ' NOSUPERUSER NOCREATEDB NOCREATEROLE NOLOGIN NOREPLICATION;',
             'CREATE ROLE ' || admin_user || ' NOSUPERUSER NOCREATEDB NOCREATEROLE NOLOGIN NOREPLICATION NOINHERIT IN ROLE ' || owner_user || ';',
             'CREATE ROLE ' || dml_user || ' NOSUPERUSER NOCREATEDB NOCREATEROLE NOLOGIN NOREPLICATION;',
-            "GRANT " || owner_user || " TO {} WITH INHERIT FALSE;"
+            'GRANT ' || owner_user || ' TO {} WITH INHERIT FALSE;'
         ];
         FOREACH statement IN ARRAY statements
         LOOP
@@ -1563,17 +1563,17 @@ BEGIN
     database := quote_ident(database);
 
     statements := ARRAY[
-        "REVOKE CREATE ON DATABASE " || database || " FROM {};",
-        "ALTER SCHEMA public OWNER TO " || owner_user || ";",
-        "GRANT CONNECT ON DATABASE " || database || " TO " || admin_user || ";",
-        "GRANT CONNECT ON DATABASE " || database || " TO {};",
-        "GRANT CONNECT ON DATABASE " || database || " TO {};",
-        "GRANT CONNECT ON DATABASE " || database || " TO {};",
-        "GRANT CONNECT ON DATABASE " || database || " TO {};",
-        "GRANT CONNECT ON DATABASE " || database || " TO {};",
-        "GRANT CONNECT ON DATABASE " || database || " TO {};",
-        "GRANT " || admin_user || " TO {} WITH INHERIT FALSE;",
-        "GRANT CONNECT ON DATABASE " || database || " TO {};"
+        'REVOKE CREATE ON DATABASE ' || database || ' FROM {};',
+        'ALTER SCHEMA public OWNER TO ' || owner_user || ';',
+        'GRANT CONNECT ON DATABASE ' || database || ' TO ' || admin_user || ';',
+        'GRANT CONNECT ON DATABASE ' || database || ' TO {};',
+        'GRANT CONNECT ON DATABASE ' || database || ' TO {};',
+        'GRANT CONNECT ON DATABASE ' || database || ' TO {};',
+        'GRANT CONNECT ON DATABASE ' || database || ' TO {};',
+        'GRANT CONNECT ON DATABASE ' || database || ' TO {};',
+        'GRANT CONNECT ON DATABASE ' || database || ' TO {};',
+        'GRANT ' || admin_user || ' TO {} WITH INHERIT FALSE;',
+        'GRANT CONNECT ON DATABASE ' || database || ' TO {};'
     ];
     FOREACH statement IN ARRAY statements
     LOOP
