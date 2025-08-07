@@ -1647,9 +1647,8 @@ $$ LANGUAGE plpgsql security definer;""").format(
                         )
                     )
                     cursor.execute(
-                        SQL(
-                            "GRANT EXECUTE ON FUNCTION set_up_predefined_catalog_roles TO {};"
-                        ).format(Literal(ROLE_DATABASES_OWNER))
+                        "GRANT EXECUTE ON FUNCTION set_up_predefined_catalog_roles TO %s;",
+                        (ROLE_DATABASES_OWNER,),
                     )
                     cursor.execute(
                         SQL("REVOKE CREATE ON DATABASE {} FROM {};").format(
