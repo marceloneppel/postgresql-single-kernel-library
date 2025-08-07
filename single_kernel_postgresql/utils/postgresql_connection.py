@@ -478,7 +478,7 @@ class PostgreSQLConnection:
                 SQL("SELECT datname FROM pg_database WHERE datname={};").format(Literal(database))
             )
             if cursor.fetchone() is None:
-                cursor.execute(SQL("SET ROLE {};").format(Identifier(ROLE_DATABASES_OWNER)))
+                cursor.execute(SQL("SET ROLE {};").format(Literal(ROLE_DATABASES_OWNER)))
                 cursor.execute(SQL("CREATE DATABASE {};").format(Identifier(database)))
                 cursor.execute(
                     SQL("REVOKE ALL PRIVILEGES ON DATABASE {} FROM PUBLIC;").format(
@@ -486,7 +486,7 @@ class PostgreSQLConnection:
                     )
                 )
             with self._connect_to_database(database=database) as conn, conn.cursor() as curs:
-                curs.execute(SQL("SET ROLE {};").format(Identifier(ROLE_DATABASES_OWNER)))
+                curs.execute(SQL("SET ROLE {};").format(Literal(ROLE_DATABASES_OWNER)))
                 curs.execute(SQL("SELECT set_up_predefined_catalog_roles();"))
         except psycopg2.Error as e:
             logger.error(f"Failed to create database: {e}")
@@ -1428,7 +1428,7 @@ class PostgreSQLConnection:
             ) as connection, connection.cursor() as cursor:
                 cursor.execute(
                     SQL("SELECT TRUE FROM pg_roles WHERE rolname='{}';").format(
-                        Identifier(ROLE_DATABASES_OWNER)
+                        Literal(ROLE_DATABASES_OWNER)
                     )
                 )
                 if cursor.fetchone() is None:
@@ -1508,9 +1508,9 @@ BEGIN
 	END;
 END;
 $$ LANGUAGE plpgsql;""").format(
-            Identifier(ROLE_ADMIN),
-            Identifier(ROLE_DATABASES_OWNER),
-            Identifier(ROLE_DATABASES_OWNER),
+            Literal(ROLE_ADMIN),
+            Literal(ROLE_DATABASES_OWNER),
+            Literal(ROLE_DATABASES_OWNER),
         )
         connection = None
         try:
@@ -1620,16 +1620,16 @@ BEGIN
     END LOOP;
 END;
 $$ LANGUAGE plpgsql security definer;""").format(
-            Identifier(ROLE_ADMIN),
-            Identifier(ROLE_DATABASES_OWNER),
-            Identifier(ROLE_STATS),
-            Identifier(ROLE_READ),
-            Identifier(ROLE_DML),
-            Identifier(ROLE_BACKUP),
-            Identifier(ROLE_DBA),
-            Identifier(ROLE_ADMIN),
-            Identifier(ROLE_ADMIN),
-            Identifier(ROLE_DATABASES_OWNER),
+            Literal(ROLE_ADMIN),
+            Literal(ROLE_DATABASES_OWNER),
+            Literal(ROLE_STATS),
+            Literal(ROLE_READ),
+            Literal(ROLE_DML),
+            Literal(ROLE_BACKUP),
+            Literal(ROLE_DBA),
+            Literal(ROLE_ADMIN),
+            Literal(ROLE_ADMIN),
+            Literal(ROLE_DATABASES_OWNER),
         )
         connection = None
         try:
@@ -1649,11 +1649,11 @@ $$ LANGUAGE plpgsql security definer;""").format(
                     cursor.execute(
                         SQL(
                             "GRANT EXECUTE ON FUNCTION set_up_predefined_catalog_roles TO {};"
-                        ).format(Identifier(ROLE_DATABASES_OWNER))
+                        ).format(Literal(ROLE_DATABASES_OWNER))
                     )
                     cursor.execute(
                         SQL("REVOKE CREATE ON DATABASE {} FROM {};").format(
-                            Identifier("template1"), Identifier(ROLE_DATABASES_OWNER)
+                            Identifier("template1"), Literal(ROLE_DATABASES_OWNER)
                         )
                     )
         except psycopg2.Error as e:
