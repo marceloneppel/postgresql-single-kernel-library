@@ -5,7 +5,7 @@
 from .config.config import CharmConfig
 from .config.literals import SYSTEM_USERS, USER
 from .lib.charms.data_platform_libs.v1.data_models import TypedCharmBase
-from .utils.postgresql_connection import PostgreSQLConnection
+from .utils.postgresql import PostgreSQL
 
 
 class AbstractPostgreSQLCharm(TypedCharmBase[CharmConfig]):
@@ -14,7 +14,7 @@ class AbstractPostgreSQLCharm(TypedCharmBase[CharmConfig]):
     def __init__(self, *args):
         super().__init__(*args)
 
-        self.postgresql_connection = PostgreSQLConnection(
+        self.postgresql = PostgreSQL(
             primary_host="",
             current_host="",
             user=USER,

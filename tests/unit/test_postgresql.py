@@ -12,7 +12,7 @@ from single_kernel_postgresql.config.literals import (
     PEER,
     SYSTEM_USERS,
 )
-from single_kernel_postgresql.utils.postgresql_connection import (
+from single_kernel_postgresql.utils.postgresql import (
     ACCESS_GROUP_INTERNAL,
     ACCESS_GROUPS,
     PostgreSQLCreateDatabaseError,
@@ -37,13 +37,13 @@ def harness():
 @pytest.mark.parametrize("users_exist", [True, False])
 def test_create_access_groups(harness, users_exist):
     with patch(
-        "single_kernel_postgresql.utils.postgresql_connection.PostgreSQLConnection._connect_to_database"
+        "single_kernel_postgresql.utils.postgresql.PostgreSQL._connect_to_database"
     ) as _connect_to_database:
         execute = _connect_to_database.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value.execute
         _connect_to_database.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value.fetchone.return_value = (
             True if users_exist else None
         )
-        harness.charm.postgresql_connection.create_access_groups()
+        harness.charm.postgresql.create_access_groups()
         calls = [
             *(
                 call(
@@ -66,9 +66,9 @@ def test_create_access_groups(harness, users_exist):
 
 def test_create_database(harness):
     with patch(
-        "single_kernel_postgresql.utils.postgresql_connection.PostgreSQLConnection.enable_disable_extensions"
+        "single_kernel_postgresql.utils.postgresql.PostgreSQL.enable_disable_extensions"
     ) as _enable_disable_extensions, patch(
-        "single_kernel_postgresql.utils.postgresql_connection.PostgreSQLConnection._connect_to_database"
+        "single_kernel_postgresql.utils.postgresql.PostgreSQL._connect_to_database"
     ) as _connect_to_database:
         # Test a successful database creation.
         database = "test_database"
@@ -79,7 +79,7 @@ def test_create_database(harness):
             harness.update_relation_data(rel_id, "application", {"database": database})
         schemas = [("test_schema_1",), ("test_schema_2",)]
         _connect_to_database.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value.fetchall.return_value = schemas
-        harness.charm.postgresql_connection.create_database(database, plugins)
+        harness.charm.postgresql.create_database(database, plugins)
         execute = _connect_to_database.return_value.cursor.return_value.execute
         execute.assert_has_calls([
             call(
@@ -100,13 +100,13 @@ def test_create_database(harness):
             other_rel_id = harness.add_relation("database", "other-application")
             harness.add_relation_unit(other_rel_id, "other-application/0")
             harness.update_relation_data(other_rel_id, "other-application", {"database": database})
-        harness.charm.postgresql_connection.create_database(database, plugins)
+        harness.charm.postgresql.create_database(database, plugins)
 
         # Test a failed database creation.
         _enable_disable_extensions.reset_mock()
         execute.side_effect = psycopg2.Error
         try:
-            harness.charm.postgresql_connection.create_database(database, plugins)
+            harness.charm.postgresql.create_database(database, plugins)
             assert False
         except PostgreSQLCreateDatabaseError:
             pass
@@ -115,10 +115,10 @@ def test_create_database(harness):
 
 def test_grant_internal_access_group_memberships(harness):
     with patch(
-        "single_kernel_postgresql.utils.postgresql_connection.PostgreSQLConnection._connect_to_database"
+        "single_kernel_postgresql.utils.postgresql.PostgreSQL._connect_to_database"
     ) as _connect_to_database:
         execute = _connect_to_database.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value.execute
-        harness.charm.postgresql_connection.grant_internal_access_group_memberships()
+        harness.charm.postgresql.grant_internal_access_group_memberships()
 
         internal_group = Identifier(ACCESS_GROUP_INTERNAL)
 
@@ -132,10 +132,10 @@ def test_grant_internal_access_group_memberships(harness):
 
 def test_grant_relation_access_group_memberships(harness):
     with patch(
-        "single_kernel_postgresql.utils.postgresql_connection.PostgreSQLConnection._connect_to_database"
+        "single_kernel_postgresql.utils.postgresql.PostgreSQL._connect_to_database"
     ) as _connect_to_database:
         execute = _connect_to_database.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value.execute
-        harness.charm.postgresql_connection.grant_relation_access_group_memberships()
+        harness.charm.postgresql.grant_relation_access_group_memberships()
 
         execute.assert_has_calls([
             call(
@@ -146,24 +146,21 @@ def test_grant_relation_access_group_memberships(harness):
 
 def test_get_last_archived_wal(harness):
     with patch(
-        "single_kernel_postgresql.utils.postgresql_connection.PostgreSQLConnection._connect_to_database"
+        "single_kernel_postgresql.utils.postgresql.PostgreSQL._connect_to_database"
     ) as _connect_to_database:
         # Test a successful call.
         execute = _connect_to_database.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value.execute
         _connect_to_database.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value.fetchone.return_value = (
             "000000010000000100000001",
         )
-        assert (
-            harness.charm.postgresql_connection.get_last_archived_wal()
-            == "000000010000000100000001"
-        )
+        assert harness.charm.postgresql.get_last_archived_wal() == "000000010000000100000001"
         execute.assert_called_once_with("SELECT last_archived_wal FROM pg_stat_archiver;")
 
         # Test a failed call.
         execute.reset_mock()
         execute.side_effect = psycopg2.Error
         try:
-            harness.charm.postgresql_connection.get_last_archived_wal()
+            harness.charm.postgresql.get_last_archived_wal()
             assert False
         except PostgreSQLGetLastArchivedWALError:
             pass
@@ -171,26 +168,21 @@ def test_get_last_archived_wal(harness):
 
 
 def test_build_postgresql_group_map(harness):
-    assert harness.charm.postgresql_connection.build_postgresql_group_map(None) == []
-    assert harness.charm.postgresql_connection.build_postgresql_group_map("ldap_group=admin") == []
+    assert harness.charm.postgresql.build_postgresql_group_map(None) == []
+    assert harness.charm.postgresql.build_postgresql_group_map("ldap_group=admin") == []
 
     for group in ACCESS_GROUPS:
-        assert (
-            harness.charm.postgresql_connection.build_postgresql_group_map(f"ldap_group={group}")
-            == []
-        )
+        assert harness.charm.postgresql.build_postgresql_group_map(f"ldap_group={group}") == []
 
     mapping_1 = "ldap_group_1=psql_group_1"
     mapping_2 = "ldap_group_2=psql_group_2"
 
-    assert harness.charm.postgresql_connection.build_postgresql_group_map(
-        f"{mapping_1},{mapping_2}"
-    ) == [
+    assert harness.charm.postgresql.build_postgresql_group_map(f"{mapping_1},{mapping_2}") == [
         ("ldap_group_1", "psql_group_1"),
         ("ldap_group_2", "psql_group_2"),
     ]
     try:
-        harness.charm.postgresql_connection.build_postgresql_group_map(f"{mapping_1} {mapping_2}")
+        harness.charm.postgresql.build_postgresql_group_map(f"{mapping_1} {mapping_2}")
         assert False
     except ValueError:
         assert True
@@ -212,9 +204,7 @@ def test_build_postgresql_parameters(harness):
         "response_test_config_option_8": "partial",
         "vacuum_test_config_option_9": 10.5,
     }
-    assert harness.charm.postgresql_connection.build_postgresql_parameters(
-        config_options, 1000000000
-    ) == {
+    assert harness.charm.postgresql.build_postgresql_parameters(config_options, 1000000000) == {
         "test_config_option_1": True,
         "test_config_option_2": False,
         "test_config_option_3": "on",
@@ -230,7 +220,7 @@ def test_build_postgresql_parameters(harness):
     }
 
     # Test with a limited imposed to the available memory.
-    parameters = harness.charm.postgresql_connection.build_postgresql_parameters(
+    parameters = harness.charm.postgresql.build_postgresql_parameters(
         config_options, 1000000000, 600000000
     )
     assert parameters["shared_buffers"] == f"{150 * 128}"
@@ -239,7 +229,7 @@ def test_build_postgresql_parameters(harness):
     # Test when the requested shared buffers are greater than 40% of the available memory.
     config_options["memory_shared_buffers"] = 50001
     try:
-        harness.charm.postgresql_connection.build_postgresql_parameters(config_options, 1000000000)
+        harness.charm.postgresql.build_postgresql_parameters(config_options, 1000000000)
         assert False
     except AssertionError as e:
         raise e
@@ -249,38 +239,32 @@ def test_build_postgresql_parameters(harness):
     # Test when the requested shared buffers are lower than 40% of the available memory
     # (also check that it's used when calculating the effective cache size value).
     config_options["memory_shared_buffers"] = 50000
-    parameters = harness.charm.postgresql_connection.build_postgresql_parameters(
-        config_options, 1000000000
-    )
+    parameters = harness.charm.postgresql.build_postgresql_parameters(config_options, 1000000000)
     assert parameters["shared_buffers"] == 50000
     assert parameters["effective_cache_size"] == f"{600 * 128}"
 
     # Test when the profile is set to "testing".
     config_options["profile"] = "testing"
-    parameters = harness.charm.postgresql_connection.build_postgresql_parameters(
-        config_options, 1000000000
-    )
+    parameters = harness.charm.postgresql.build_postgresql_parameters(config_options, 1000000000)
     assert parameters["shared_buffers"] == 50000
     assert "effective_cache_size" not in parameters
 
     # Test when there is no shared_buffers value set in the config option.
     del config_options["memory_shared_buffers"]
-    parameters = harness.charm.postgresql_connection.build_postgresql_parameters(
-        config_options, 1000000000
-    )
+    parameters = harness.charm.postgresql.build_postgresql_parameters(config_options, 1000000000)
     assert "shared_buffers" not in parameters
     assert "effective_cache_size" not in parameters
 
 
 def test_configure_pgaudit(harness):
     with patch(
-        "single_kernel_postgresql.utils.postgresql_connection.PostgreSQLConnection._connect_to_database"
+        "single_kernel_postgresql.utils.postgresql.PostgreSQL._connect_to_database"
     ) as _connect_to_database:
         # Test when pgAudit is enabled.
         execute = (
             _connect_to_database.return_value.cursor.return_value.__enter__.return_value.execute
         )
-        harness.charm.postgresql_connection._configure_pgaudit(True)
+        harness.charm.postgresql._configure_pgaudit(True)
         execute.assert_has_calls([
             call("ALTER SYSTEM SET pgaudit.log = 'ROLE,DDL,MISC,MISC_SET';"),
             call("ALTER SYSTEM SET pgaudit.log_client TO off;"),
@@ -290,7 +274,7 @@ def test_configure_pgaudit(harness):
 
         # Test when pgAudit is disabled.
         execute.reset_mock()
-        harness.charm.postgresql_connection._configure_pgaudit(False)
+        harness.charm.postgresql._configure_pgaudit(False)
         execute.assert_has_calls([
             call("ALTER SYSTEM RESET pgaudit.log;"),
             call("ALTER SYSTEM RESET pgaudit.log_client;"),
@@ -301,29 +285,26 @@ def test_configure_pgaudit(harness):
 
 def test_validate_group_map(harness):
     with patch(
-        "single_kernel_postgresql.utils.postgresql_connection.PostgreSQLConnection._connect_to_database"
+        "single_kernel_postgresql.utils.postgresql.PostgreSQL._connect_to_database"
     ) as _connect_to_database:
         execute = _connect_to_database.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value.execute
         _connect_to_database.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value.fetchone.return_value = None
 
         query = SQL("SELECT TRUE FROM pg_roles WHERE rolname={};")
 
-        assert harness.charm.postgresql_connection.validate_group_map(None) is True
+        assert harness.charm.postgresql.validate_group_map(None) is True
 
-        assert harness.charm.postgresql_connection.validate_group_map("") is False
-        assert harness.charm.postgresql_connection.validate_group_map("ldap_group=") is False
+        assert harness.charm.postgresql.validate_group_map("") is False
+        assert harness.charm.postgresql.validate_group_map("ldap_group=") is False
         execute.assert_has_calls([
             call(query.format(Literal(""))),
         ])
 
-        assert harness.charm.postgresql_connection.validate_group_map("ldap_group=admin") is True
-        assert harness.charm.postgresql_connection.validate_group_map("ldap_group=admin,") is False
-        assert harness.charm.postgresql_connection.validate_group_map("ldap_group admin") is False
+        assert harness.charm.postgresql.validate_group_map("ldap_group=admin") is True
+        assert harness.charm.postgresql.validate_group_map("ldap_group=admin,") is False
+        assert harness.charm.postgresql.validate_group_map("ldap_group admin") is False
 
-        assert (
-            harness.charm.postgresql_connection.validate_group_map("ldap_group=missing_group")
-            is False
-        )
+        assert harness.charm.postgresql.validate_group_map("ldap_group=missing_group") is False
         execute.assert_has_calls([
             call(query.format(Literal("missing_group"))),
         ])
